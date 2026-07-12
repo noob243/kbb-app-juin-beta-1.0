@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usePersistentState } from './hooks/usePersistentState';
-import { initialClients, initialCases, initialEvents, initialTasks, initialInvoices, initialAvocats, initialPersonnels, initialFournisseurs } from './data/mockData';
+import { initialClients, initialCases, initialEvents, initialTasks, initialInvoices, initialAvocats, initialPersonnels, initialFournisseurs, initialProcedures } from './data/mockData';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -21,7 +21,7 @@ import AllInterfacesPage from './pages/AllInterfacesPage';
 import AIAssistantPage from './pages/AIAssistantPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import CorrespondancePage from './pages/CorrespondancePage';
-import { Client, Case, Event, Task, Invoice, Avocat, Personnel, Fournisseur, AuditLog } from './types';
+import { Client, Case, Event, Task, Invoice, Avocat, Personnel, Fournisseur, AuditLog, CaseProcedure } from './types';
 import { playAlarmSound, stopAllAlarmSounds } from './utils/audio';
 
 // Firebase core configuration
@@ -64,6 +64,7 @@ function App() {
     const [avocats, setAvocats] = usePersistentState<Avocat[]>('kbb_avocats', initialAvocats);
     const [personnels, setPersonnels] = usePersistentState<Personnel[]>('kbb_personnels', initialPersonnels);
     const [fournisseurs, setFournisseurs] = usePersistentState<Fournisseur[]>('kbb_fournisseurs', initialFournisseurs);
+    const [procedures, setProcedures] = usePersistentState<CaseProcedure[]>('kbb_procedures', initialProcedures);
     const [logs, setLogs] = useState<AuditLog[]>([]);
     const [presences, setPresences] = useState<{ [email: string]: any }>({});
 
@@ -159,7 +160,8 @@ function App() {
                 await syncLocalCollection('avocats', avocats);
                 await syncLocalCollection('personnels', personnels);
                 await syncLocalCollection('fournisseurs', fournisseurs);
-                
+                await syncLocalCollection('procedures', procedures);
+
                 triggerToast('success', 'Synchronisation avec Firestore réussie !');
                 setIsSyncComplete(true);
             } catch (err) {
@@ -372,6 +374,14 @@ function App() {
                 setFournisseurs(list);
             }, (err) => console.error("Fournisseurs sync error:", err));
 
+            const unsubProcedures = onSnapshot(collection(db, 'procedures'), (snapshot) => {
+                const list: CaseProcedure[] = [];
+                snapshot.forEach((doc) => {
+                    list.push(doc.data() as CaseProcedure);
+                });
+                setProcedures(list);
+            }, (err) => console.error("Procedures sync error:", err));
+
             const unsubAuditLogs = onSnapshot(collection(db, 'auditLogs'), (snapshot) => {
                 const list: AuditLog[] = [];
                 snapshot.forEach((doc) => {
@@ -397,6 +407,7 @@ function App() {
                 unsubAvocats();
                 unsubPersonnels();
                 unsubFournisseurs();
+                unsubProcedures();
                 unsubAuditLogs();
                 unsubPresences();
             };
@@ -994,8 +1005,8 @@ function App() {
         setCases(prev => prev.map(c => c.id === updated.id ? updated : c));
         try {
             const { id, ...properties } = updated;
-            const clean = { ...properties, procedures: null };
-            await dbUpdateDoc('cases', id, clean);
+            // Sanitizing to ensure no non-serializable data is sent
+            await dbUpdateDoc('cases', id, properties);
             triggerToast('success', `Modifications du dossier "${updated.name}" validées !`);
         } catch (err) {
             triggerToast('error', "Erreur lors de la mise à jour.");
@@ -1047,6 +1058,50 @@ function App() {
         }
     };
 
+    const handleAddProcedure = async (newProc: CaseProcedure) => {
+        setProcedures(prev => [...prev, newProc]);
+        try {
+            const { id, ...cleanProc } = newProc;
+            await dbCreateDoc('procedures', id, cleanProc);
+            triggerToast('success', `Procédure "${newProc.name}" créée !`);
+        } catch (err) {
+            triggerToast('error', "Échec de l'enregistrement de la procédure.");
+        }
+    };
+
+    const handleUpdateProcedure = async (updated: CaseProcedure) => {
+        setProcedures(prev => prev.map(p => p.id === updated.id ? updated : p));
+        try {
+            const { id, ...properties } = updated;
+            await dbUpdateDoc('procedures', id, properties);
+            triggerToast('success', `Procédure "${updated.name}" mise à jour !`);
+        } catch (err) {
+            triggerToast('error', "Échec de la mise à jour de la procédure.");
+        }
+    };
+
+    const executeDeleteProcedure = async (id: string) => {
+        const p = procedures.find(x => x.id === id);
+        setProcedures(procedures.filter(p => p.id !== id));
+        try {
+            await dbDeleteDoc('procedures', id);
+            triggerToast('success', `Procédure "${p?.name || id}" supprimée.`);
+        } catch (err) {
+            triggerToast('error', "Échec de la suppression.");
+        }
+    };
+
+    const handleDeleteProcedure = (id: string) => {
+        const p = procedures.find(item => item.id === id);
+        const name = p?.name || id;
+        setConfirmModal({
+            isOpen: true,
+            title: "Supprimer la procédure ?",
+            message: `Voulez-vous vraiment supprimer définitivement la procédure "${name}" ?`,
+            onConfirm: () => executeDeleteProcedure(id)
+        });
+    };
+
     const filteredClients = clients.filter(c => 
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
         c.contact.toLowerCase().includes(searchQuery.toLowerCase())
@@ -1075,13 +1130,16 @@ function App() {
             clients: filteredClients, 
             cases: filteredCases, 
             events: filteredEvents, 
-            tasks, invoices, avocats, lawyerNames, personnels, fournisseurs,
+            tasks, invoices, avocats, lawyerNames, personnels, fournisseurs, procedures,
             onAddClient: handleAddClient, onAddCase: handleAddCase, onAddEvent: handleAddEvent,
             onAddTask: handleAddTask, onAddInvoice: handleAddInvoice, onAddAvocat: handleAddAvocat, onAddPersonnel: handleAddPersonnel, onAddFournisseur: handleAddFournisseur,
+            onAddProcedure: handleAddProcedure,
             onDeleteClient: handleDeleteClient, onDeleteCase: handleDeleteCase, onDeleteAvocat: handleDeleteAvocat, onDeletePersonnel: handleDeletePersonnel, onDeleteFournisseur: handleDeleteFournisseur,
             onDeleteEvent: handleDeleteEvent, onDeleteTask: handleDeleteTask, onDeleteInvoice: handleDeleteInvoice,
+            onDeleteProcedure: handleDeleteProcedure,
             onExportClients: handleExportClients, onExportCases: handleExportCases,
             onUpdateClient: handleUpdateClient, onUpdateCase: handleUpdateCase, onUpdateAvocat: handleUpdateAvocat, onUpdatePersonnel: handleUpdatePersonnel, onUpdateEvent: handleUpdateEvent, onUpdateTask: handleUpdateTask, onUpdateInvoice: handleUpdateInvoice, onUpdateFournisseur: handleUpdateFournisseur,
+            onUpdateProcedure: handleUpdateProcedure,
             onSendEmail: triggerEmail,
             onExportBackup: handleExportBackup,
         };
@@ -1109,11 +1167,11 @@ function App() {
         }
 
         switch (currentPage) {
-            case 'Dashboard': return <DashboardPage clients={filteredClients} cases={filteredCases} events={filteredEvents} tasks={tasks} invoices={invoices} avocats={avocats} onUpdateTaskStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} />;
+            case 'Dashboard': return <DashboardPage clients={filteredClients} cases={filteredCases} events={filteredEvents} tasks={tasks} invoices={invoices} avocats={avocats} onUpdateTaskStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} procedures={procedures} />;
             case 'AIAssistant': return <AIAssistantPage clients={filteredClients} cases={filteredCases} tasks={tasks} invoices={invoices} />;
             case 'Clients': return <ClientsPage clients={filteredClients} cases={cases} invoices={invoices} tasks={tasks} onAddClient={handleAddClient} onExport={handleExportClients} onSendEmail={triggerEmail} />;
-            case 'Dossiers': return <CasesPage cases={filteredCases} clients={filteredClients} tasks={tasks} invoices={invoices} onAddCase={handleAddCase} onExport={handleExportCases} avocats={avocats} onSendEmail={triggerEmail} />;
-            case 'Procedures': return <ProceduresPage cases={cases} onUpdateCase={handleUpdateCase} onSendEmail={triggerEmail} />;
+            case 'Dossiers': return <CasesPage cases={filteredCases} clients={filteredClients} tasks={tasks} invoices={invoices} onAddCase={handleAddCase} onExport={handleExportCases} avocats={avocats} onSendEmail={triggerEmail} procedures={procedures} />;
+            case 'Procedures': return <ProceduresPage cases={cases} procedures={procedures} onAddProcedure={handleAddProcedure} onUpdateProcedure={handleUpdateProcedure} onDeleteProcedure={handleDeleteProcedure} onSendEmail={triggerEmail} />;
             case 'Evenements': return <EventsPage events={filteredEvents} onAddEvent={handleAddEvent} onUpdateEvent={handleUpdateEvent} avocats={avocats} personnels={personnels} onSendEmail={triggerEmail} />;
             case 'Agenda': return <AgendaPage tasks={tasks} cases={filteredCases} lawyers={lawyerNames} avocats={avocats} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} events={filteredEvents} onSendEmail={triggerEmail} />;
             case 'Chat': return (
@@ -1139,8 +1197,8 @@ function App() {
             case 'Fournisseurs': return <FournisseursPage fournisseurs={fournisseurs} onAddFournisseur={handleAddFournisseur} onDeleteFournisseur={handleDeleteFournisseur} onSendEmail={triggerEmail} />;
             case 'Gestion': return <GestionPage {...pageProps} onSendEmail={triggerEmail} />;
             case 'AuditLogs': return <AuditLogsPage logs={logs} />;
-            case 'All': return <AllInterfacesPage {...pageProps} />;
-            default: return <DashboardPage clients={filteredClients} cases={filteredCases} events={filteredEvents} tasks={tasks} invoices={invoices} avocats={avocats} onUpdateTaskStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} />;
+            case 'All': return <AllInterfacesPage {...pageProps} onSendEmail={triggerEmail} personnels={personnels} fournisseurs={fournisseurs} procedures={procedures} />;
+            default: return <DashboardPage clients={filteredClients} cases={filteredCases} events={filteredEvents} tasks={tasks} invoices={invoices} avocats={avocats} onUpdateTaskStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} procedures={procedures} />;
         }
     };
 

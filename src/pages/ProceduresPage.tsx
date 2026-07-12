@@ -20,17 +20,20 @@ import {
 
 interface ProceduresPageProps {
   cases: Case[];
-  onUpdateCase: (updatedCase: Case) => void;
+  procedures: CaseProcedure[];
+  onAddProcedure: (newProc: CaseProcedure) => void;
+  onUpdateProcedure: (updated: CaseProcedure) => void;
+  onDeleteProcedure: (id: string) => void;
+  onSendEmail: (to: string, subject: string, body: string, recipientName?: string, attachmentName?: string) => void;
 }
 
-const ProceduresPage: FC<ProceduresPageProps> = ({ cases, onUpdateCase }) => {
+const ProceduresPage: FC<ProceduresPageProps> = ({ cases, procedures, onAddProcedure, onUpdateProcedure, onDeleteProcedure, onSendEmail }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProcedure, setEditingProcedure] = useState<CaseProcedure | null>(null);
-  const [oldCaseId, setOldCaseId] = useState<string>(''); // To track if we changed the associated Case
 
   // Form states
   const [formData, setFormData] = useState({
@@ -43,18 +46,19 @@ const ProceduresPage: FC<ProceduresPageProps> = ({ cases, onUpdateCase }) => {
     associatedCaseId: ''
   });
 
-  // Flatmap all procedures from cases & supplement them with case context
-  const allProcedures = cases.flatMap(c => {
-    return (c.procedures || []).map(p => ({
+  // Supplement procedures with case context
+  const proceduresWithContext = procedures.map(p => {
+    const associatedCase = cases.find(c => (c.procedures || []).some(cp => cp.id === p.id) || (p.linkedCases && p.linkedCases.includes(c.id)));
+    return {
       ...p,
-      caseId: c.id,
-      caseName: c.name,
-      clientName: c.client
-    }));
+      caseId: associatedCase?.id || '',
+      caseName: associatedCase?.name || 'Aucun dossier rattaché',
+      clientName: associatedCase?.client || 'N/A'
+    };
   });
 
   // Filter procedures
-  const filteredProcedures = allProcedures.filter(proc => {
+  const filteredProcedures = proceduresWithContext.filter(proc => {
     const matchesSearch = 
       proc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (proc.instance || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -68,14 +72,13 @@ const ProceduresPage: FC<ProceduresPageProps> = ({ cases, onUpdateCase }) => {
   });
 
   // Stats calculate
-  const totalCount = allProcedures.length;
-  const activeCount = allProcedures.filter(p => p.status === 'En cours').length;
-  const pendingCount = allProcedures.filter(p => p.status === 'En attente' || p.status === 'En attente / Suspendu').length;
-  const closedCount = allProcedures.filter(p => p.status === 'Clôturé' || p.status === 'Clôturé / Terminé').length;
+  const totalCount = procedures.length;
+  const activeCount = procedures.filter(p => p.status === 'En cours').length;
+  const pendingCount = procedures.filter(p => p.status === 'En attente' || p.status === 'En attente / Suspendu').length;
+  const closedCount = procedures.filter(p => p.status === 'Clôturé' || p.status === 'Clôturé / Terminé').length;
 
   const handleOpenAddModal = () => {
     setEditingProcedure(null);
-    setOldCaseId('');
     setFormData({
       name: '',
       instance: '',
@@ -90,7 +93,6 @@ const ProceduresPage: FC<ProceduresPageProps> = ({ cases, onUpdateCase }) => {
 
   const handleOpenEditModal = (proc: CaseProcedure & { caseId: string }) => {
     setEditingProcedure(proc);
-    setOldCaseId(proc.caseId);
     setFormData({
       name: proc.name,
       instance: proc.instance || '',
@@ -105,15 +107,10 @@ const ProceduresPage: FC<ProceduresPageProps> = ({ cases, onUpdateCase }) => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.associatedCaseId) {
-      alert("Veuillez sélectionner un dossier.");
-      return;
-    }
 
-    const totalProceduresCount = cases.reduce((acc, c) => acc + (c.procedures?.length || 0), 0);
     const procedureId = editingProcedure 
       ? editingProcedure.id 
-      : `PROC-${totalProceduresCount + 1}`;
+      : `PROC-${Date.now()}`;
 
     const updatedProc: CaseProcedure = {
       id: procedureId,
@@ -122,67 +119,21 @@ const ProceduresPage: FC<ProceduresPageProps> = ({ cases, onUpdateCase }) => {
       objet: formData.objet,
       dateDebut: formData.dateDebut,
       dateFin: formData.dateFin,
-      status: formData.status
+      status: formData.status,
+      linkedCases: formData.associatedCaseId ? [formData.associatedCaseId] : []
     };
 
     if (editingProcedure) {
-      // Editing existing procedure
-      if (oldCaseId === formData.associatedCaseId) {
-        // Just update in the same case
-        const sourceCase = cases.find(c => c.id === oldCaseId);
-        if (sourceCase) {
-          const updatedProcs = (sourceCase.procedures || []).map(p => p.id === procedureId ? updatedProc : p);
-          onUpdateCase({
-            ...sourceCase,
-            procedures: updatedProcs
-          });
-        }
-      } else {
-        // Remove from old case and add to new case
-        const oldCase = cases.find(c => c.id === oldCaseId);
-        if (oldCase) {
-          const updatedOldProcs = (oldCase.procedures || []).filter(p => p.id !== procedureId);
-          onUpdateCase({
-            ...oldCase,
-            procedures: updatedOldProcs
-          });
-        }
-
-        const newCase = cases.find(c => c.id === formData.associatedCaseId);
-        if (newCase) {
-          const updatedNewProcs = [...(newCase.procedures || []), updatedProc];
-          onUpdateCase({
-            ...newCase,
-            procedures: updatedNewProcs
-          });
-        }
-      }
+      onUpdateProcedure(updatedProc);
     } else {
-      // Creating a brand new procedure
-      const targetCase = cases.find(c => c.id === formData.associatedCaseId);
-      if (targetCase) {
-        const updatedNewProcs = [...(targetCase.procedures || []), updatedProc];
-        onUpdateCase({
-          ...targetCase,
-          procedures: updatedNewProcs
-        });
-      }
+      onAddProcedure(updatedProc);
     }
 
     setIsModalOpen(false);
   };
 
-  const handleDelete = (procId: string, caseId: string) => {
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer cette procédure ? Cela ne supprimera pas le dossier rattaché.")) {
-      const parentCase = cases.find(c => c.id === caseId);
-      if (parentCase) {
-        const remainingProcs = (parentCase.procedures || []).filter(p => p.id !== procId);
-        onUpdateCase({
-          ...parentCase,
-          procedures: remainingProcs
-        });
-      }
-    }
+  const handleDelete = (procId: string) => {
+    onDeleteProcedure(procId);
   };
 
   const getStatusBadge = (status: string | undefined) => {
@@ -357,7 +308,7 @@ const ProceduresPage: FC<ProceduresPageProps> = ({ cases, onUpdateCase }) => {
                   <Edit3 className="w-3.5 h-3.5" /> Modifier
                 </button>
                 <button 
-                  onClick={() => handleDelete(proc.id, proc.caseId)}
+                  onClick={() => handleDelete(proc.id)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-extrabold transition"
                   title="Supprimer la procédure"
                 >

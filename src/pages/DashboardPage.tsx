@@ -13,52 +13,44 @@ interface DashboardPageProps {
   avocats?: Avocat[];
   onUpdateTaskStatus?: (id: number, status: 'Effectué' | 'Non effectué' | 'Effectué à moitié') => void;
   onAddTask?: (newTask: Omit<Task, 'id'>) => void;
+  procedures?: CaseProcedure[];
 }
 
-const DashboardPage: FC<DashboardPageProps> = ({ clients, cases, events, tasks = [], invoices = [], avocats = [], onUpdateTaskStatus, onAddTask }) => {
+const DashboardPage: FC<DashboardPageProps> = ({ clients, cases, events, tasks = [], invoices = [], avocats = [], onUpdateTaskStatus, onAddTask, procedures = [] }) => {
     const activeCases = cases.filter(c => c.status === 'En cours' || c.status === 'Nouveau');
     const upcomingEvents = events.filter(e => new Date(e.date) >= new Date());
     const pendingTasks = tasks.filter(t => t.status !== 'Effectué');
 
-    // Calculate flat list of procedures
-    const availProcedures = cases.flatMap(c => {
-        const list = [];
-        if (c.procedures && c.procedures.length > 0) {
-            c.procedures.forEach(p => {
-                list.push({
-                    key: `${c.id}:::${p.id}`,
-                    id: p.id,
-                    name: p.name || 'Sans nom',
-                    caseId: c.id,
-                    caseName: c.name,
-                    client: c.client
-                });
-            });
-        }
-        
-        if (c.procedure && (!c.procedures || !c.procedures.some(p => p.name === c.procedure))) {
-            list.push({
-                key: `${c.id}:::PRIMARY`,
-                id: 'PRIMARY',
-                name: c.procedure,
-                caseId: c.id,
-                caseName: c.name,
-                client: c.client
-            });
-        }
-
-        if ((!c.procedures || c.procedures.length === 0) && !c.procedure) {
-            list.push({
-                key: `${c.id}:::GENERAL`,
-                id: 'GENERAL',
-                name: 'Procédure Générale',
-                caseId: c.id,
-                caseName: c.name,
-                client: c.client
-            });
-        }
-        return list;
+    // Use top-level procedures for the selection list
+    const availProcedures = procedures.map(p => {
+        const associatedCase = cases.find(c => (p.linkedCases || []).includes(c.id));
+        return {
+            key: p.id,
+            id: p.id,
+            name: p.name || 'Sans nom',
+            caseId: associatedCase?.id || '',
+            caseName: associatedCase?.name || 'Inconnu',
+            client: associatedCase?.client || 'Inconnu'
+        };
     });
+
+    // Fallback if procedures is empty (backwards compatibility with nested data during migration)
+    if (availProcedures.length === 0) {
+        cases.forEach(c => {
+            if (c.procedures) {
+                c.procedures.forEach(p => {
+                    availProcedures.push({
+                        key: `${c.id}:::${p.id}`,
+                        id: p.id,
+                        name: p.name || 'Sans nom',
+                        caseId: c.id,
+                        caseName: c.name,
+                        client: c.client
+                    });
+                });
+            }
+        });
+    }
 
     // Tab switcher state for financial widget
     const [financeTab, setFinanceTab] = useState<'cases' | 'clients'>('cases');

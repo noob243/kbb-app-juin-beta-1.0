@@ -126,6 +126,9 @@ export function cleanAndDefaultRecord(collectionName: string, item: any): any {
     cleaned.naturePrestation = cleaned.naturePrestation || 'Services';
     cleaned.typeFacturation = cleaned.typeFacturation || 'Ponctuelle';
     cleaned.montant = cleaned.montant !== undefined && cleaned.montant !== null ? Number(cleaned.montant) : 0;
+  } else if (collectionName === 'procedures') {
+    cleaned.name = cleaned.name || 'Procédure sans nom';
+    cleaned.status = cleaned.status || 'En cours';
   }
   
   return cleaned;

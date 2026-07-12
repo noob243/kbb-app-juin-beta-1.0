@@ -15,6 +15,7 @@ interface CasesPageProps {
   avocats: Avocat[];
   invoices?: Invoice[];
   onSendEmail: (to: string, subject: string, body: string, recipientName?: string, attachmentName?: string) => void;
+  procedures?: CaseProcedure[];
 }
 
 const formatCurrency = (amount: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount);
@@ -28,7 +29,7 @@ const getInvoiceStatusClass = (status: string) => {
     }
 };
 
-const CasesPage: FC<CasesPageProps> = ({ cases, clients, tasks = [], onAddCase, onExport, avocats, invoices = [], onSendEmail }) => {
+const CasesPage: FC<CasesPageProps> = ({ cases, clients, tasks = [], onAddCase, onExport, avocats, invoices = [], onSendEmail, procedures = [] }) => {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [selectedCase, setSelectedCase] = useState<Case | null>(null);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -36,7 +37,8 @@ const CasesPage: FC<CasesPageProps> = ({ cases, clients, tasks = [], onAddCase, 
     const handleEmailReport = (c: Case) => {
         const caseInvoices = invoices.filter(inv => inv.caseId.toLowerCase() === c.id.toLowerCase());
         const caseTasks = tasks.filter(t => t.caseId.toLowerCase() === c.id.toLowerCase());
-        
+        const caseProcedures = procedures.filter(p => p.linkedCases && p.linkedCases.includes(c.id));
+
         const currentClient = clients.find(cl => cl.name.toLowerCase() === c.client.toLowerCase());
         const clientEmail = currentClient?.email || `${c.client.toLowerCase().replace(/\s+/g, '.')}@entreprise.cd`;
         const clientContact = currentClient?.contact || 'Responsable';
@@ -49,6 +51,14 @@ const CasesPage: FC<CasesPageProps> = ({ cases, clients, tasks = [], onAddCase, 
         body += `📋 Statut : ${c.status}\n`;
         body += `📆 Prochaine audience de procédure : ${c.nextHearing || 'Aucune programmée'}\n\n`;
         
+        if (caseProcedures.length > 0) {
+            body += `⚖️ Procédures en cours :\n`;
+            caseProcedures.forEach(p => {
+                body += `- ${p.name} (Statut: ${p.status || 'En cours'})\n`;
+            });
+            body += `\n`;
+        }
+
         if (caseTasks.length > 0) {
             body += `📅 Actions et Délais en cours :\n`;
             caseTasks.forEach(t => {
@@ -267,35 +277,41 @@ const CasesPage: FC<CasesPageProps> = ({ cases, clients, tasks = [], onAddCase, 
 
                                 <div className="md:col-span-2 space-y-3 bg-indigo-50/15 border border-indigo-100/50 p-4 rounded-xl">
                                     <span className="text-[10px] font-black text-[#15447c] uppercase tracking-wider block mb-2">⚖️ Procédures du Dossier</span>
-                                    {!selectedCase.procedures || selectedCase.procedures.length === 0 ? (
-                                        <div className="p-3 bg-white border border-slate-150 rounded-lg text-xs">
-                                            <p className="font-bold text-gray-800">{selectedCase.procedure || "Procédure d'Arbitrage Standard"}</p>
-                                            <p className="text-3xs text-gray-500 font-bold uppercase mt-1">
-                                                Instance: {selectedCase.procedureInstance || "Tribunal"} • Objet: {selectedCase.procedureObjet || "N/A"}
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                                            {selectedCase.procedures.map(p => (
-                                                <div key={p.id} className="p-3 bg-white border border-slate-150 rounded-xl flex items-start justify-between gap-4 shadow-3xs">
-                                                    <div>
-                                                        <p className="text-xs font-black text-slate-800 leading-tight">{p.name}</p>
-                                                        <p className="text-[10px] text-gray-500 font-semibold mt-1">
-                                                            Instance : <strong className="text-gray-700">{p.instance || 'Non précisée'}</strong> • Objet : <strong className="text-gray-700">{p.objet || 'Non défini'}</strong>
-                                                        </p>
-                                                        <p className="text-3xs text-slate-400 font-bold uppercase mt-0.5">Introduit le : {p.dateDebut || 'Non défini'} • Fin le : {p.dateFin || 'Non défini'}</p>
-                                                    </div>
-                                                    <span className={`px-2 py-0.5 rounded text-3xs font-bold uppercase tracking-wider border shrink-0 ${
-                                                        p.status === 'En cours' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                        p.status === 'Clôturé' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                        'bg-amber-50 text-amber-700 border-amber-100'
-                                                    }`}>
-                                                        {p.status || 'En cours'}
-                                                    </span>
+                                    {(() => {
+                                        const caseProcedures = procedures.filter(p => p.linkedCases && p.linkedCases.includes(selectedCase.id));
+                                        if (caseProcedures.length === 0) {
+                                            return (
+                                                <div className="p-3 bg-white border border-slate-150 rounded-lg text-xs">
+                                                    <p className="font-bold text-gray-800">{selectedCase.procedure || "Procédure d'Arbitrage Standard"}</p>
+                                                    <p className="text-3xs text-gray-500 font-bold uppercase mt-1">
+                                                        Instance: {selectedCase.procedureInstance || "Tribunal"} • Objet: {selectedCase.procedureObjet || "N/A"}
+                                                    </p>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                            );
+                                        }
+                                        return (
+                                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                                {caseProcedures.map(p => (
+                                                    <div key={p.id} className="p-3 bg-white border border-slate-150 rounded-xl flex items-start justify-between gap-4 shadow-3xs">
+                                                        <div>
+                                                            <p className="text-xs font-black text-slate-800 leading-tight">{p.name}</p>
+                                                            <p className="text-[10px] text-gray-500 font-semibold mt-1">
+                                                                Instance : <strong className="text-gray-700">{p.instance || 'Non précisée'}</strong> • Objet : <strong className="text-gray-700">{p.objet || 'Non défini'}</strong>
+                                                            </p>
+                                                            <p className="text-3xs text-slate-400 font-bold uppercase mt-0.5">Introduit le : {p.dateDebut || 'Non défini'} • Fin le : {p.dateFin || 'Non défini'}</p>
+                                                        </div>
+                                                        <span className={`px-2 py-0.5 rounded text-3xs font-bold uppercase tracking-wider border shrink-0 ${
+                                                            p.status?.includes('cours') ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                                            p.status?.includes('Clôturé') ? 'bg-green-50 text-green-700 border-green-100' :
+                                                            'bg-amber-50 text-amber-700 border-amber-100'
+                                                        }`}>
+                                                            {p.status || 'En cours'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 

@@ -161,4 +161,25 @@ export const initialFournisseurs: Fournisseur[] = [
     }
 ];
 
+export const initialProcedures: CaseProcedure[] = [
+    {
+        id: 'PROC-1',
+        name: 'Référé-provision',
+        instance: 'Tribunal de Commerce de Kinshasa',
+        objet: 'Recouvrement de créances',
+        dateDebut: '2024-01-10',
+        status: 'En cours',
+        linkedCases: ['CI-2023-001']
+    },
+    {
+        id: 'PROC-2',
+        name: 'Assignation au fond',
+        instance: 'TGI Kinshasa/Gombe',
+        objet: 'Litige immobilier',
+        dateDebut: '2023-11-05',
+        status: 'En attente',
+        linkedCases: ['BCC-2022-050']
+    }
+];
+
 
