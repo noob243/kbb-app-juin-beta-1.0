@@ -1,0 +1,219 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Handled helpers
+    function isSignedIn() {
+      return true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isStringWithSize(val, maxLen) {
+      return val is string && val.size() <= maxLen;
+    }
+
+    function isNumber(val) {
+      return val is int || val is float;
+    }
+
+    // Helper to validate Client schema
+    function isValidClient(data) {
+      return data.keys().hasAll(['id', 'name', 'contact'])
+        && (data.id is int || data.id is float || data.id is string)
+        && isStringWithSize(data.name, 250)
+        && isStringWithSize(data.contact, 250);
+    }
+
+    // Helper to validate Case schema
+    function isValidCase(data) {
+      return data.keys().hasAll(['id', 'name', 'client', 'status'])
+        && (data.id is string || data.id is int || data.id is float)
+        && isStringWithSize(data.name, 250)
+        && isStringWithSize(data.client, 250)
+        && (data.status == 'Nouveau' || data.status == 'En cours' || data.status == 'En attente' || data.status == 'Clôturé');
+    }
+
+    // Helper to validate Event schema
+    function isValidEvent(data) {
+      return data.keys().hasAll(['id', 'name', 'type', 'date', 'lieu'])
+        && (data.id is string || data.id is int || data.id is float)
+        && isStringWithSize(data.name, 250)
+        && isStringWithSize(data.type, 100)
+        && isStringWithSize(data.date, 100)
+        && isStringWithSize(data.lieu, 250);
+    }
+
+    // Helper to validate Avocat schema
+    function isValidAvocat(data) {
+      return data.keys().hasAll(['id', 'fullName', 'firstOathDate', 'onaNumber', 'cabinetStatus', 'serviceStatus', 'phone'])
+        && (data.id is string || data.id is int || data.id is float)
+        && isStringWithSize(data.fullName, 250)
+        && isStringWithSize(data.firstOathDate, 100)
+        && isStringWithSize(data.onaNumber, 100)
+        && isStringWithSize(data.cabinetStatus, 100)
+        && isStringWithSize(data.serviceStatus, 100)
+        && isStringWithSize(data.phone, 100);
+    }
+
+    // Helper to validate Task schema
+    function isValidTask(data) {
+      return data.keys().hasAll(['id', 'name', 'caseId', 'lawyer', 'dueDate', 'status'])
+        && (data.id is int || data.id is float || data.id is string)
+        && isStringWithSize(data.name, 500)
+        && isStringWithSize(data.caseId, 100)
+        && isStringWithSize(data.lawyer, 250)
+        && isStringWithSize(data.dueDate, 100)
+        && (data.status == 'Effectué' || data.status == 'Non effectué' || data.status == 'Effectué à moitié');
+    }
+
+    // Helper to validate Invoice schema
+    function isValidInvoice(data) {
+      return data.keys().hasAll(['id', 'caseId', 'dueDate', 'totalAmount', 'paidAmount', 'status'])
+        && (data.id is string || data.id is int || data.id is float)
+        && isStringWithSize(data.caseId, 100)
+        && isStringWithSize(data.dueDate, 100)
+        && isNumber(data.totalAmount)
+        && isNumber(data.paidAmount)
+        && (data.status == 'Réglée' || data.status == 'Non réglée' || data.status == 'En cours');
+    }
+
+    // Helper to validate Personnel schema
+    function isValidPersonnel(data) {
+      return data.keys().hasAll(['id', 'fullName', 'role', 'email', 'phone', 'serviceStartDate', 'serviceStatus', 'salary'])
+        && (data.id is string || data.id is int || data.id is float)
+        && isStringWithSize(data.fullName, 250)
+        && isStringWithSize(data.role, 150)
+        && isStringWithSize(data.email, 150)
+        && isStringWithSize(data.phone, 100)
+        && isStringWithSize(data.serviceStartDate, 100)
+        && isStringWithSize(data.serviceStatus, 100)
+        && isNumber(data.salary);
+    }
+
+    // Helper to validate Fournisseur schema
+    function isValidFournisseur(data) {
+      return data.keys().hasAll(['id', 'nomComplet', 'naturePrestation', 'typeFacturation', 'montant'])
+        && (data.id is string || data.id is int || data.id is float)
+        && isStringWithSize(data.nomComplet, 250)
+        && isStringWithSize(data.naturePrestation, 100)
+        && isStringWithSize(data.typeFacturation, 100)
+        && isNumber(data.montant);
+    }
+
+    // Helper to validate AuditLog schema
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'timestamp', 'userEmail', 'userName', 'actionType', 'module', 'description'])
+        && (data.id is string || data.id is int || data.id is float)
+        && isStringWithSize(data.timestamp, 150)
+        && isStringWithSize(data.userEmail, 250)
+        && isStringWithSize(data.userName, 250)
+        && (data.actionType == 'Ajout' || data.actionType == 'Modification' || data.actionType == 'Suppression' || data.actionType == 'Connexion' || data.actionType == 'Autre')
+        && isStringWithSize(data.module, 100)
+        && isStringWithSize(data.description, 1000);
+    }
+
+    // Helper to validate Correspondance schema
+    function isValidCorrespondance(data) {
+      return data.keys().hasAll(['id', 'date', 'type', 'recipientName', 'subject', 'content', 'status', 'author'])
+        && (data.id is string || data.id is int || data.id is float)
+        && isStringWithSize(data.date, 100)
+        && isStringWithSize(data.type, 100)
+        && isStringWithSize(data.recipientName, 250)
+        && isStringWithSize(data.subject, 250)
+        && isStringWithSize(data.content, 1000000)
+        && (data.status == 'Brouillon' || data.status == 'Envoyé' || data.status == 'Reçu')
+        && isStringWithSize(data.author, 250);
+    }
+
+    // Clients rules
+    match /clients/{clientId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidClient(request.resource.data);
+      allow update: if isSignedIn() && isValidClient(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    // Cases rules
+    match /cases/{caseId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidCase(request.resource.data);
+      allow update: if isSignedIn() && isValidCase(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    // Events rules
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidEvent(request.resource.data);
+      allow update: if isSignedIn() && isValidEvent(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    // Avocats rules
+    match /avocats/{avocatId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidAvocat(request.resource.data);
+      allow update: if isSignedIn() && isValidAvocat(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    // Tasks rules
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidTask(request.resource.data);
+      allow update: if isSignedIn() && isValidTask(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    // Invoices rules
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidInvoice(request.resource.data);
+      allow update: if isSignedIn() && isValidInvoice(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    // Personnels rules
+    match /personnels/{personnelId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidPersonnel(request.resource.data);
+      allow update: if isSignedIn() && isValidPersonnel(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    // Fournisseurs rules
+    match /fournisseurs/{fournisseurId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidFournisseur(request.resource.data);
+      allow update: if isSignedIn() && isValidFournisseur(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    // AuditLogs rules
+    match /auditLogs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidAuditLog(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // Presences rules
+    match /presences/{presenceId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Correspondances rules
+    match /correspondances/{correspondanceId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidCorrespondance(request.resource.data);
+      allow update: if isSignedIn() && isValidCorrespondance(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+  }
+}
