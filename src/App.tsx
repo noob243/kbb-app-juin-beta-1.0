@@ -311,10 +311,8 @@ function App() {
                 snapshot.forEach((doc) => {
                     list.push(doc.data() as Client);
                 });
-                if (list.length > 0) {
-                    list.sort((a, b) => Number(a.id) - Number(b.id));
-                    setClients(list);
-                }
+                list.sort((a, b) => Number(a.id) - Number(b.id));
+                setClients(list);
             }, (err) => console.error("Clients sync error:", err));
 
             const unsubCases = onSnapshot(collection(db, 'cases'), (snapshot) => {
@@ -322,9 +320,7 @@ function App() {
                 snapshot.forEach((doc) => {
                     list.push(doc.data() as Case);
                 });
-                if (list.length > 0) {
-                    setCases(list);
-                }
+                setCases(list);
             }, (err) => console.error("Cases sync error:", err));
 
             const unsubEvents = onSnapshot(collection(db, 'events'), (snapshot) => {
@@ -332,9 +328,7 @@ function App() {
                 snapshot.forEach((doc) => {
                     list.push(doc.data() as Event);
                 });
-                if (list.length > 0) {
-                    setEvents(list);
-                }
+                setEvents(list);
             }, (err) => console.error("Events sync error:", err));
 
             const unsubTasks = onSnapshot(collection(db, 'tasks'), (snapshot) => {
@@ -342,10 +336,8 @@ function App() {
                 snapshot.forEach((doc) => {
                     list.push(doc.data() as Task);
                 });
-                if (list.length > 0) {
-                    list.sort((a, b) => Number(a.id) - Number(b.id));
-                    setTasks(list);
-                }
+                list.sort((a, b) => Number(a.id) - Number(b.id));
+                setTasks(list);
             }, (err) => console.error("Tasks sync error:", err));
 
             const unsubInvoices = onSnapshot(collection(db, 'invoices'), (snapshot) => {
@@ -353,9 +345,7 @@ function App() {
                 snapshot.forEach((doc) => {
                     list.push(doc.data() as Invoice);
                 });
-                if (list.length > 0) {
-                    setInvoices(list);
-                }
+                setInvoices(list);
             }, (err) => console.error("Invoices sync error:", err));
 
             const unsubAvocats = onSnapshot(collection(db, 'avocats'), (snapshot) => {
@@ -363,9 +353,7 @@ function App() {
                 snapshot.forEach((doc) => {
                     list.push(doc.data() as Avocat);
                 });
-                if (list.length > 0) {
-                    setAvocats(list);
-                }
+                setAvocats(list);
             }, (err) => console.error("Avocats sync error:", err));
 
             const unsubPersonnels = onSnapshot(collection(db, 'personnels'), (snapshot) => {
@@ -373,9 +361,7 @@ function App() {
                 snapshot.forEach((doc) => {
                     list.push(doc.data() as Personnel);
                 });
-                if (list.length > 0) {
-                    setPersonnels(list);
-                }
+                setPersonnels(list);
             }, (err) => console.error("Personnels sync error:", err));
 
             const unsubFournisseurs = onSnapshot(collection(db, 'fournisseurs'), (snapshot) => {
@@ -383,9 +369,7 @@ function App() {
                 snapshot.forEach((doc) => {
                     list.push(doc.data() as Fournisseur);
                 });
-                if (list.length > 0) {
-                    setFournisseurs(list);
-                }
+                setFournisseurs(list);
             }, (err) => console.error("Fournisseurs sync error:", err));
 
             const unsubAuditLogs = onSnapshot(collection(db, 'auditLogs'), (snapshot) => {
@@ -419,7 +403,7 @@ function App() {
         } catch (syncError) {
             console.error("Firestore synchronizers preparation failed:", syncError);
         }
-    }, [isDbConnected]);
+    }, [isDbConnected, isSyncComplete]);
 
     // Manage user presence status in Firestore
     useEffect(() => {
